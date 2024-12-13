@@ -1,0 +1,10 @@
+[package]
+name = "llama_link"
+version = "0.1.0"
+edition = "2024"
+license-file = "LICENSE"
+description = "A llama.cpp server interface"
+repository = "https://github.com/mcmah309/llama_link"
+readme = "README.md"
+
+[dependencies]
