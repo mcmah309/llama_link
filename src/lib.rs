@@ -1,6 +1,7 @@
 mod errors;
 
 use core::panic;
+use error_set::ResultContext;
 use errors::{CompletionError, ToolCallError};
 use llmtoolbox::ToolBox;
 use reqwest::Client;
@@ -31,8 +32,7 @@ pub struct LlamaLink {
     request_config: Map<String, Value>,
 }
 
-pub type CompletionStream =
-    std::pin::Pin<Box<dyn tokio_stream::Stream<Item = String> + Send>>;
+pub type CompletionStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = String> + Send>>;
 
 impl LlamaLink {
     pub fn new(url: &str, request_config: Config) -> Self {
@@ -108,10 +108,7 @@ impl LlamaLink {
         tool_call_result
     }
 
-    pub async fn completion_stream(
-        &self,
-        prompt: String,
-    ) -> Result<CompletionStream, CompletionError> {
+    pub fn completion_stream(&self, prompt: String) -> Option<CompletionStream> {
         let mut json = self.request_config.clone();
         json.insert("prompt".to_owned(), Value::String(prompt));
         json.insert("stream".to_owned(), Value::Bool(true));
@@ -120,23 +117,23 @@ impl LlamaLink {
         let request = self.client.post(&self.completion_url).json(&json);
 
         // Why SSE: https://github.com/ggerganov/llama.cpp/blob/89d604f2c87af9db657d8a27a1528bc4b7579c29/examples/server/README.md?plain=1#L450
-        let es = EventSource::new(request).map_err(|_| CompletionError::Api {
-            issue: "Could not create event source for SSE".to_owned(),
+        let es = EventSource::new(request).consume_with_error(|_| {
+            "Could not create event source for SSE in completion stream".to_owned()
         })?;
         let stream = es
             .map(|event| match event {
                 Ok(Event::Open) => {
                     #[cfg(feature = "tracing")]
-                    tracing::trace!("SSE connection open.");
+                    tracing::trace!("Completion stream SSE connection open.");
                     Some(String::new())
                 }
                 Ok(Event::Message(message)) => {
                     let response = serde_json::from_str::<CompletionResponse>(&message.data);
                     match response {
                         Ok(response) => {
-                            if response.stop.unwrap_or(false) {          
+                            if response.stop.unwrap_or(false) {
                                 #[cfg(feature = "tracing")]
-                                tracing::trace!("Stop recieved in response");
+                                tracing::trace!("Completion stream recieved stop");
                                 return None;
                             }
                             Some(response.content.unwrap_or_else(|| String::new()))
@@ -146,22 +143,22 @@ impl LlamaLink {
                             #[cfg(feature = "tracing")]
                             tracing::error!("Error in completion stream: {:?}", e);
                             None
-                    },
+                        }
                     }
                 }
                 Err(err) => {
                     if matches!(err, reqwest_eventsource::Error::StreamEnded) {
                         #[cfg(feature = "tracing")]
-                        tracing::trace!("Stream ended.");
+                        tracing::trace!("Completion stream ended.");
                         return None;
                     }
                     #[cfg(feature = "tracing")]
-                    tracing::error!("Error in stream: {}", err);
+                    tracing::error!("Error in completion stream: {}", err);
                     None
                 }
             })
             .take_while(|e| e.is_some())
             .filter_map(|e| e);
-        Ok(Box::pin(stream))
+        Some(Box::pin(stream))
     }
 }

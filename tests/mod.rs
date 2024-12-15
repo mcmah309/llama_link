@@ -15,7 +15,7 @@ mod normal {
     #[tokio::test]
     async fn completion_stream() {
         let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
-        let mut response_stream = link.completion_stream("In one sentence, tell me a joke.".to_owned()).await.unwrap();
+        let mut response_stream = link.completion_stream("In one sentence, tell me a joke.".to_owned()).unwrap();
 
         let mut count = 0;
         #[allow(unused_variables)]
