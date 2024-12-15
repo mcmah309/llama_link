@@ -2,6 +2,7 @@ mod errors;
 
 use core::panic;
 use errors::LlamaError;
+use llmtoolbox::ToolBox;
 use reqwest::Client;
 use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
@@ -9,7 +10,7 @@ use serde_json::{Map, Value};
 use tokio_stream::StreamExt;
 
 #[derive(Serialize, bon::Builder)]
-pub struct RequestConfig {
+pub struct Config {
     n_predict: Option<usize>,
     temperature: Option<f32>,
     top_k: Option<usize>,
@@ -34,7 +35,7 @@ pub type CompletionStream =
     std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<String, LlamaError>> + Send>>;
 
 impl LlamaLink {
-    pub fn new(url: &str, request_config: RequestConfig) -> Self {
+    pub fn new(url: &str, request_config: Config) -> Self {
         let request_config = match serde_json::to_value(request_config).unwrap() {
             Value::Object(map) => map,
             _ => panic!("RequestConfig is not an object"),
@@ -98,6 +99,43 @@ impl LlamaLink {
         response_body
             .content
             .ok_or_else(|| "No response content".to_string().into())
+    }
+
+    pub async fn tool_call<O, E>(
+        &self,
+        prompt: String,
+        toolbox: &ToolBox<O, E>,
+    ) -> Result<Result<Result<O, E>, llmtoolbox::CallError>, LlamaError> {
+        let mut json = self.request_config.clone();
+        json.insert("prompt".to_owned(), Value::String(prompt));
+        json.insert(
+            "json_schema".to_owned(),
+            Value::Object(toolbox.schema().clone()),
+        );
+        let json = Value::Object(json);
+
+        let response = self
+            .client
+            .post(&self.completion_url)
+            .json(&json)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(LlamaError {
+                message: format!("HTTP Error: {}", response.status()),
+            });
+        }
+
+        let response_body: CompletionResponse = response.json().await?;
+        let content = response_body
+            .content
+            .ok_or_else(|| LlamaError::from("No response content".to_string()))?;
+        println!("Content: {}", &content);
+        let tool_call = serde_json::from_str(&content).unwrap(); //todo
+        let tool_call_result: Result<Result<O, E>, llmtoolbox::CallError> =
+            toolbox.call(tool_call).await;
+        Ok(tool_call_result)
     }
 
     pub async fn completion_stream(&self, prompt: String) -> Result<CompletionStream, LlamaError> {

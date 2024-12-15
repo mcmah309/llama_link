@@ -1,12 +1,12 @@
 #[cfg(test)]
-mod tests {
+mod normal {
     use llama_link::*;
     use serde_json::Value;
     use tokio_stream::StreamExt;
 
     #[tokio::test]
     async fn completion() {
-        let link = LlamaLink::new("http://127.0.0.1:3756", RequestConfig::builder().build());
+        let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
 
         let response = link.completion("In one sentence, tell me a joke.".to_owned()).await.unwrap();
 
@@ -15,7 +15,7 @@ mod tests {
 
     #[tokio::test]
     async fn raw_tool_call() {
-        let link = LlamaLink::new("http://127.0.0.1:3756", RequestConfig::builder().build());
+        let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
 
         let schema = serde_json::json!({
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -158,7 +158,7 @@ mod tests {
 
     #[tokio::test]
     async fn completion_stream() {
-        let link = LlamaLink::new("http://127.0.0.1:3756", RequestConfig::builder().build());
+        let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
         let mut response_stream = link.completion_stream("In one sentence, tell me a joke.".to_owned()).await.unwrap();
 
         let mut count = 0;
@@ -174,5 +174,75 @@ mod tests {
             }
         }
         assert!(count > 0);
+    }
+}
+
+#[cfg(test)]
+mod toolbox {
+    use std::{any::Any, convert::Infallible, ops::Deref};
+
+    use llama_link::*;
+    use llmtoolbox::{llmtool, ToolBox};
+
+    #[derive(Debug)]
+    struct MyTool;
+
+    #[llmtool]
+    impl MyTool {
+        fn new() -> Self {
+            Self
+        }
+
+        /// This
+        /// `greeting` - descr
+        #[tool_part]
+        fn greet(&self, greeting: &str) -> String {
+            println!("Greetings!");
+            format!("This is the greeting `{greeting}`")
+        }
+
+        #[allow(dead_code)]
+        fn goodbye(&self) -> u32 {
+            println!("Goodbye!");
+            1
+        }
+
+        /// func descrip
+        /// `topic` - field description
+        #[tool_part]
+        async fn talk(&self, topic: ConverstationTopic) -> u32 {
+            let ConverstationTopic { topic, opinion } = topic;
+            println!("For {topic} it is {opinion}");
+            0
+        }
+    }
+
+    /// Description
+    #[derive(serde::Deserialize, schemars::JsonSchema)]
+    pub struct ConverstationTopic {
+        pub topic: String,
+        pub opinion: String,
+    }
+
+    #[tokio::test]
+    async fn tool_call() {
+        let tool = MyTool::new();
+        let mut toolbox: ToolBox<Box<dyn Any>, Infallible> = ToolBox::new();
+        toolbox.add_tool(tool).unwrap();
+        // println!("Schema: {}", serde_json::to_string_pretty(&toolbox.schema()).unwrap());
+
+        let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
+        let response = link
+            .tool_call("call greet".to_owned(), &toolbox)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        match response.downcast::<String>() {
+            Ok(message) => assert!(
+                message.deref().starts_with("This is the greeting")
+            ),
+            Err(_) => panic!("Not the corect type"),
+        }
     }
 }
