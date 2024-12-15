@@ -211,6 +211,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "error_set"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "384ceba2f830b31ce5e30a9a22b47a35b630a89cc6337348fb89258a1dbf83fb"
+dependencies = [
+ "error_set_impl",
+]
+
+[[package]]
+name = "error_set_impl"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c90322ec4af49f60cb82bcc209eb99585772800d97a8fc71184cf79d170c8182"
+dependencies = [
+ "indices",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "eventsource-stream"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -634,6 +655,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indices"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e125c680c3871dc195cfd3ff94a877a78f31d5e9c1a3a62cce82689ece14bf7"
+
+[[package]]
 name = "ipnet"
 version = "2.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -678,6 +705,7 @@ name = "llama_link"
 version = "0.1.0"
 dependencies = [
  "bon",
+ "error_set",
  "llmtoolbox",
  "reqwest",
  "reqwest-eventsource",
@@ -692,7 +720,7 @@ dependencies = [
 [[package]]
 name = "llmtool"
 version = "0.0.1"
-source = "git+https://github.com/mcmah309/llmtoolbox.git#58eb15b2253a3a9233a965720ca6c83b8fcf3e6d"
+source = "git+https://github.com/mcmah309/llmtoolbox.git#a71be912de789550b563946045bb80c3c072abbf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -703,8 +731,9 @@ dependencies = [
 [[package]]
 name = "llmtoolbox"
 version = "0.0.1"
-source = "git+https://github.com/mcmah309/llmtoolbox.git#58eb15b2253a3a9233a965720ca6c83b8fcf3e6d"
+source = "git+https://github.com/mcmah309/llmtoolbox.git#a71be912de789550b563946045bb80c3c072abbf"
 dependencies = [
+ "error_set",
  "llmtool",
  "serde_json",
 ]
