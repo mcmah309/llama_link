@@ -5,9 +5,6 @@ use std::{
 
 use serde::Deserialize;
 
-/// A result type for olinker.
-pub type Result<T> = std::result::Result<T, LlamaError>;
-
 /// An error type for olinker.
 #[derive(Deserialize)]
 pub struct LlamaError {

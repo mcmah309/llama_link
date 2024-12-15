@@ -2,11 +2,10 @@ mod errors;
 
 use core::panic;
 use errors::LlamaError;
-use reqwest::{Client, Error};
+use reqwest::Client;
 use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::io::{self, Write};
 use tokio_stream::StreamExt;
 
 #[derive(Serialize, bon::Builder)]
@@ -16,6 +15,7 @@ pub struct RequestConfig {
     top_k: Option<usize>,
     top_p: Option<f32>,
     stop: Option<Vec<String>>,
+    // json_schema: Value,
 }
 
 #[derive(Deserialize, Debug)]
@@ -58,16 +58,16 @@ impl LlamaLink {
             .send()
             .await?;
 
-        if response.status().is_success() {
-            let response_body: CompletionResponse = response.json().await?;
-            response_body
-                .content
-                .ok_or_else(|| "No response content".to_string().into())
-        } else {
-            Err(LlamaError {
+        if !response.status().is_success() {
+            return Err(LlamaError {
                 message: format!("HTTP Error: {}", response.status()),
-            })
+            });
         }
+
+        let response_body: CompletionResponse = response.json().await?;
+        response_body
+            .content
+            .ok_or_else(|| "No response content".to_string().into())
     }
 
     pub async fn raw_tool_call(&self, prompt: String, schema: Value) -> Result<String, LlamaError> {
@@ -88,16 +88,16 @@ impl LlamaLink {
             .send()
             .await?;
 
-        if response.status().is_success() {
-            let response_body: CompletionResponse = response.json().await?;
-            response_body
-                .content
-                .ok_or_else(|| "No response content".to_string().into())
-        } else {
-            Err(LlamaError {
+        if !response.status().is_success() {
+            return Err(LlamaError {
                 message: format!("HTTP Error: {}", response.status()),
-            })
+            });
         }
+
+        let response_body: CompletionResponse = response.json().await?;
+        response_body
+            .content
+            .ok_or_else(|| "No response content".to_string().into())
     }
 
     pub async fn completion_stream(&self, prompt: String) -> Result<CompletionStream, LlamaError> {
@@ -109,31 +109,38 @@ impl LlamaLink {
         let request = self.client.post(&self.completion_url).json(&json);
 
         // Why SSE: https://github.com/ggerganov/llama.cpp/blob/89d604f2c87af9db657d8a27a1528bc4b7579c29/examples/server/README.md?plain=1#L450
-        let es = EventSource::new(request).map_err(|_| "".to_owned())?;
-        // es.set_retry_policy(policy);
+        let es = EventSource::new(request)
+            .map_err(|_| "Could not create event source for SSE".to_owned())?;
         let stream = es
             .map(|event| match event {
                 Ok(Event::Open) => {
-                    println!("Connection Open!");
-                    Some(Ok("".to_owned()))
+                    #[cfg(feature = "tracing")]
+                    tracing::trace!("SSE connection open.");
+                    Some(Ok(String::new()))
                 }
                 Ok(Event::Message(message)) => {
                     let response = serde_json::from_str::<CompletionResponse>(&message.data);
                     match response {
                         Ok(response) => {
                             if response.stop.unwrap_or(false) {
+                                #[cfg(feature = "tracing")]
+                                tracing::trace!("Stop recieved in response");
                                 return None;
                             }
-                            Some(Ok(response.content.unwrap_or_else(|| "".to_owned())))
+                            Some(Ok(response.content.unwrap_or_else(|| String::new())))
                         }
                         Err(e) => Some(Err(LlamaError::from(format!("Error in stream: {:?}", e)))),
                     }
                 }
                 Err(err) => {
-                    println!("Error: {}", err);
-                    // es.close();
+                    if matches!(err, reqwest_eventsource::Error::StreamEnded) {
+                        #[cfg(feature = "tracing")]
+                        tracing::trace!("Stream ended.");
+                        return None;
+                    }
+                    #[cfg(feature = "tracing")]
+                    tracing::error!("Error in stream: {}", err);
                     None
-                    // Err(LlamaError::from(format!("Error in stream: {:?}", err)))
                 }
             })
             .take_while(|e| e.is_some())

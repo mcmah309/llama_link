@@ -159,19 +159,20 @@ mod tests {
     #[tokio::test]
     async fn completion_stream() {
         let link = LlamaLink::new("http://127.0.0.1:3756", RequestConfig::builder().build());
-
         let mut response_stream = link.completion_stream("In one sentence, tell me a joke.".to_owned()).await.unwrap();
 
+        let mut count = 0;
         while let Some(response) = response_stream.next().await {
             match response {
-                Ok(response) => {
-                    print!("{}", response);
-                    // assert!(!response.is_empty());
+                Ok(_content) => {
+                    count += 1;
+                    // print!("{}", content);
                 }
                 Err(err) => {
                     panic!("{}", err);
                 }
             }
         }
+        assert!(count > 0);
     }
 }
