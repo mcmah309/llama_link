@@ -721,7 +721,7 @@ dependencies = [
 [[package]]
 name = "llmtool"
 version = "0.0.1"
-source = "git+https://github.com/mcmah309/llmtoolbox.git#a71be912de789550b563946045bb80c3c072abbf"
+source = "git+https://github.com/mcmah309/llmtoolbox.git#23804ed5aa5b3e8c34e1559a8039a2898e87ee6a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -732,7 +732,7 @@ dependencies = [
 [[package]]
 name = "llmtoolbox"
 version = "0.0.1"
-source = "git+https://github.com/mcmah309/llmtoolbox.git#a71be912de789550b563946045bb80c3c072abbf"
+source = "git+https://github.com/mcmah309/llmtoolbox.git#23804ed5aa5b3e8c34e1559a8039a2898e87ee6a"
 dependencies = [
  "error_set",
  "llmtool",

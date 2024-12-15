@@ -32,12 +32,12 @@ mod toolbox {
     use std::{any::Any, convert::Infallible, ops::Deref};
 
     use llama_link::*;
-    use llmtoolbox::{llmtool, ToolBox};
+    use llmtoolbox::{tool, ToolBox};
 
     #[derive(Debug)]
     struct MyTool;
 
-    #[llmtool]
+    #[tool]
     impl MyTool {
         fn new() -> Self {
             Self
