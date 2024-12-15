@@ -2,12 +2,13 @@
 mod tests {
     use llama_link::*;
     use serde_json::Value;
+    use tokio_stream::StreamExt;
 
     #[tokio::test]
     async fn completion() {
         let link = LlamaLink::new("http://127.0.0.1:3756", RequestConfig::builder().build());
 
-        let response = link.completion("Tell me a joke.".to_owned()).await.unwrap();
+        let response = link.completion("In one sentence, tell me a joke.".to_owned()).await.unwrap();
 
         assert!(!response.is_empty())
     }
@@ -153,5 +154,24 @@ mod tests {
             function_name.as_str()
         })();
         assert_eq!(tool_name, Some("create_user"));
+    }
+
+    #[tokio::test]
+    async fn completion_stream() {
+        let link = LlamaLink::new("http://127.0.0.1:3756", RequestConfig::builder().build());
+
+        let mut response_stream = link.completion_stream("In one sentence, tell me a joke.".to_owned()).await.unwrap();
+
+        while let Some(response) = response_stream.next().await {
+            match response {
+                Ok(response) => {
+                    print!("{}", response);
+                    // assert!(!response.is_empty());
+                }
+                Err(err) => {
+                    panic!("{}", err);
+                }
+            }
+        }
     }
 }

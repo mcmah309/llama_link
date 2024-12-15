@@ -3,9 +3,11 @@ mod errors;
 use core::panic;
 use errors::LlamaError;
 use reqwest::{Client, Error};
+use reqwest_eventsource::{Event, EventSource};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::io::{self, Write};
+use tokio_stream::StreamExt;
 
 #[derive(Serialize, bon::Builder)]
 pub struct RequestConfig {
@@ -27,6 +29,9 @@ pub struct LlamaLink {
     completion_url: String,
     request_config: Map<String, Value>,
 }
+
+pub type CompletionStream =
+    std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Result<String, LlamaError>> + Send>>;
 
 impl LlamaLink {
     pub fn new(url: &str, request_config: RequestConfig) -> Self {
@@ -94,40 +99,45 @@ impl LlamaLink {
             })
         }
     }
+
+    pub async fn completion_stream(&self, prompt: String) -> Result<CompletionStream, LlamaError> {
+        let mut json = self.request_config.clone();
+        json.insert("prompt".to_owned(), Value::String(prompt));
+        json.insert("stream".to_owned(), Value::Bool(true));
+        let json = Value::Object(json);
+
+        let request = self.client.post(&self.completion_url).json(&json);
+
+        // Why SSE: https://github.com/ggerganov/llama.cpp/blob/89d604f2c87af9db657d8a27a1528bc4b7579c29/examples/server/README.md?plain=1#L450
+        let es = EventSource::new(request).map_err(|_| "".to_owned())?;
+        // es.set_retry_policy(policy);
+        let stream = es
+            .map(|event| match event {
+                Ok(Event::Open) => {
+                    println!("Connection Open!");
+                    Some(Ok("".to_owned()))
+                }
+                Ok(Event::Message(message)) => {
+                    let response = serde_json::from_str::<CompletionResponse>(&message.data);
+                    match response {
+                        Ok(response) => {
+                            if response.stop.unwrap_or(false) {
+                                return None;
+                            }
+                            Some(Ok(response.content.unwrap_or_else(|| "".to_owned())))
+                        }
+                        Err(e) => Some(Err(LlamaError::from(format!("Error in stream: {:?}", e)))),
+                    }
+                }
+                Err(err) => {
+                    println!("Error: {}", err);
+                    // es.close();
+                    None
+                    // Err(LlamaError::from(format!("Error in stream: {:?}", err)))
+                }
+            })
+            .take_while(|e| e.is_some())
+            .filter_map(|e| e);
+        Ok(Box::pin(stream))
+    }
 }
-
-// async fn make_stream_request(client: &Client, url: &str, prompt: &str) -> Result<(), Error> {
-//     let request_body = CompletionRequest {
-//         prompt: prompt.to_string(),
-//         n_predict: 128,
-//         stream: true,
-//         temperature: Some(0.8),
-//         top_k: Some(40),
-//         top_p: Some(0.9),
-//         stop: Some(vec!["\n".to_string()]),
-//     };
-
-//     let response = client.post(url).json(&request_body).send().await?;
-
-//     if response.status().is_success() {
-//         let mut stream = response.bytes_stream();
-//         while let Some(chunk) = stream.next().await {
-//             match chunk {
-//                 Ok(bytes) => {
-//                     if let Ok(text) = String::from_utf8(bytes.to_vec()) {
-//                         print!("{}", text);
-//                         io::stdout().flush().unwrap();
-//                     }
-//                 }
-//                 Err(e) => {
-//                     eprintln!("Error in stream: {:?}", e);
-//                     break;
-//                 }
-//             }
-//         }
-//     } else {
-//         eprintln!("HTTP Error: {}", response.status());
-//     }
-
-//     Ok(())
-// }
