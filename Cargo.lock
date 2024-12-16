@@ -703,7 +703,7 @@ checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 
 [[package]]
 name = "llama_link"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bon",
  "error_set",
@@ -720,8 +720,9 @@ dependencies = [
 
 [[package]]
 name = "llmtool"
-version = "0.0.1"
-source = "git+https://github.com/mcmah309/llmtoolbox.git#23804ed5aa5b3e8c34e1559a8039a2898e87ee6a"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20b386fba8da641928a7ed55e4577f388c5e6779937a39b8dd3a7752f29ccd2b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -731,8 +732,9 @@ dependencies = [
 
 [[package]]
 name = "llmtoolbox"
-version = "0.0.1"
-source = "git+https://github.com/mcmah309/llmtoolbox.git#23804ed5aa5b3e8c34e1559a8039a2898e87ee6a"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec709d3d5ae2e4096b90091a5946d445a0e0a65255e18678c3e9722620c9cd4f"
 dependencies = [
  "error_set",
  "llmtool",

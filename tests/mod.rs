@@ -79,7 +79,7 @@ mod toolbox {
         let tool = MyTool::new();
         let mut toolbox: ToolBox<Box<dyn Any>, Infallible> = ToolBox::new();
         toolbox.add_tool(tool).unwrap();
-        // println!("Schema: {}", serde_json::to_string_pretty(&toolbox.schema()).unwrap());
+        println!("Schema: {}", serde_json::to_string_pretty(&toolbox.schema()).unwrap());
 
         let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
         let result = link
