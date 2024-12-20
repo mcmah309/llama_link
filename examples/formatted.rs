@@ -50,8 +50,11 @@ async fn main() {
     toolbox.add_tool(tool).unwrap();
 
     let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
+    let system = format!("You are a helpful AI assistant. Respond to the user in this json function calling format: {}",serde_json::to_string(toolbox.schema()).unwrap());
+    let messages = vec![Message::User("What do you think about the rust programming language".to_owned())];
     let result = link
-        .tool_call(format_prompt("What do you think about canadians", &toolbox), &toolbox)
+        .formatted_tool_call(
+            &system, &messages, &PromptFormatter::default(), &toolbox)
         .await;
     match result {
         Ok(Ok(call_result)) => println!("{}", call_result),
@@ -59,18 +62,6 @@ async fn main() {
     }
 }
 
-// Out: "Hello Dave, I don't like `Canadians`, because `Canadians are too boring`"
-// Out: "Hello Dave, I like `Canadians`, because `I love Canadians for their kindness and respect for other cultures`"
-// Out: "Hello Dave, I don't like `Canadians`, because `Canadians are very rude to tourists.`"
-
-fn format_prompt<O, E>(user: &str, toolbox: &ToolBox<O, E>) -> String {
-    format!(
-        r#"<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-You are a helpful AI assistant. Respond to the user in this json function calling format:
-    {}<|eot_id|><|start_header_id|>user<|end_header_id|>
-    {}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-    "#,
-        serde_json::to_string(toolbox.schema()).unwrap(),
-        user
-    )
-}
+// Out: Hello Dave, I like `Rust programming language`, because `Rust is a great programming language that offers a unique combination of safety, performance, and concurrency features, making it an excellent choice for systems programming.`
+// Out: Hello Dave, I like `Rust programming language`, because `I think Rust is a fantastic programming language that offers a unique combination of performance, safety, and concurrency features. Its ownership model and borrow checker help prevent common programming errors like null pointer dereferences and data races, making it a great choice for systems programming.`
+// Out: Hello Dave, I like `Rust programming language`, because `I think Rust is a great programming language due to its strong focus on safety and performance. Its ownership system and borrow checker help prevent common programming errors like null pointer dereferences and data races, making it a reliable choice for systems programming.`

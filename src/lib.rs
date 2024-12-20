@@ -1,8 +1,11 @@
+mod data;
 mod errors;
+
+pub use data::Message;
+pub use errors::{CompletionError, ToolCallError};
 
 use core::panic;
 use error_set::ResultContext;
-use errors::{CompletionError, ToolCallError};
 use llmtoolbox::ToolBox;
 use reqwest::Client;
 use reqwest_eventsource::{Event, EventSource};
@@ -67,7 +70,7 @@ impl LlamaLink {
 
         let response_body: CompletionResponse = response.json().await?;
         response_body.content.ok_or_else(|| CompletionError::Api {
-            issue: "No `content` field in reposne body".to_owned(),
+            issue: "No `content` field in response body".to_owned(),
         })
     }
 
@@ -99,13 +102,25 @@ impl LlamaLink {
 
         let response_body: CompletionResponse = response.json().await?;
         let content = response_body.content.ok_or_else(|| ToolCallError::Api {
-            issue: "No `content` field in reposne body".to_owned(),
+            issue: "No `content` field in response body".to_owned(),
         })?;
-        println!("Content: {}", &content);
+        #[cfg(feature = "tracing")]
+        tracing::debug!("Raw tool_call response:\n`{}`", &content);
         let tool_call = serde_json::from_str(&content).unwrap(); //todo
         let tool_call_result: Result<Result<O, E>, ToolCallError> =
             toolbox.call(tool_call).await.map_err(|error| error.into());
         tool_call_result
+    }
+
+    pub async fn formatted_tool_call<O, E>(
+        &self,
+        system: &str,
+        messages: &[Message],
+        formatter: &PromptFormatter,
+        toolbox: &ToolBox<O, E>,
+    ) -> Result<Result<O, E>, ToolCallError> {
+        let prompt = (formatter.0)(system, messages);
+        self.tool_call(prompt, toolbox).await
     }
 
     pub fn completion_stream(&self, prompt: String) -> Option<CompletionStream> {
@@ -133,7 +148,7 @@ impl LlamaLink {
                         Ok(response) => {
                             if response.stop.unwrap_or(false) {
                                 #[cfg(feature = "tracing")]
-                                tracing::trace!("Completion stream recieved stop");
+                                tracing::trace!("Completion stream received stop");
                                 return None;
                             }
                             Some(response.content.unwrap_or_else(|| String::new()))
@@ -160,5 +175,54 @@ impl LlamaLink {
             .take_while(|e| e.is_some())
             .filter_map(|e| e);
         Some(Box::pin(stream))
+    }
+}
+
+/// The formatter used to create the prompt for the llm
+pub struct PromptFormatter(fn(&str, &[Message]) -> String);
+
+impl PromptFormatter {
+    pub fn new(format: fn(&str, &[Message]) -> String) -> Self {
+        Self(format)
+    }
+}
+
+impl Default for PromptFormatter {
+    // https://www.llama.com/docs/model-cards-and-prompt-formats/meta-llama-3/
+    fn default() -> Self {
+        Self(|system, messages| {
+            debug_assert!(messages.len() > 0, "Messages must not be empty");
+            debug_assert!(
+                matches!(messages.first().unwrap(), Message::User(_)),
+                "First message must be a user message"
+            );
+            debug_assert!(
+                matches!(messages.last().unwrap(), Message::User(_)),
+                "Last message must be a user message"
+            );
+            let mut formatted = String::new();
+            formatted.push_str(&format!(
+                "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|>",
+                system
+            ));
+            for message in messages {
+                match message {
+                    Message::User(text) => {
+                        formatted.push_str(&format!(
+                            "<|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|>",
+                            text
+                        ));
+                    }
+                    Message::Assistant(text) => {
+                        formatted.push_str(&format!(
+                            "<|start_header_id|>assistant<|end_header_id|>\n\n{}<|eot_id|>",
+                            text
+                        ));
+                    }
+                }
+            }
+            formatted.push_str("<|start_header_id|>assistant<|end_header_id|>\n\n");
+            formatted
+        })
     }
 }
