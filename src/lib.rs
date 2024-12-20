@@ -61,6 +61,16 @@ impl LlamaLink {
         }
     }
 
+    pub async fn formatted_completion(
+        &self,
+        system: &str,
+        messages: &[Message],
+        formatter: &PromptFormatter,
+    ) -> Result<String, CompletionError> {
+        let prompt = (formatter.0)(system, messages);
+        self.completion(prompt).await
+    }
+
     pub async fn completion(&self, prompt: String) -> Result<String, CompletionError> {
         let mut json = self.request_config.clone();
         json.insert("prompt".to_owned(), Value::String(prompt));
