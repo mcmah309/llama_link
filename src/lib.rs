@@ -1,7 +1,5 @@
-mod data;
 mod errors;
 
-pub use data::Message;
 pub use errors::{CompletionError, ToolCallError};
 
 use core::panic;
@@ -33,6 +31,17 @@ pub struct LlamaLink {
     client: Client,
     completion_url: String,
     request_config: Map<String, Value>,
+}
+
+pub enum Message {
+    User(String),
+    Assistant(String),
+}
+
+/// The result from calling the tool and the raw input used to call the tool.
+pub struct ToolCallWithRawInput<O, E> {
+    pub tool_result: Result<O, E>,
+    pub tool_input: String,
 }
 
 pub type CompletionStream = std::pin::Pin<Box<dyn tokio_stream::Stream<Item = String> + Send>>;
@@ -79,6 +88,38 @@ impl LlamaLink {
         prompt: String,
         toolbox: &ToolBox<O, E>,
     ) -> Result<Result<O, E>, ToolCallError> {
+        self.tool_call_with_raw_input(prompt, toolbox)
+            .await
+            .map(|e| e.tool_result)
+    }
+
+    pub async fn formatted_tool_call<O, E>(
+        &self,
+        system: &str,
+        messages: &[Message],
+        formatter: &PromptFormatter,
+        toolbox: &ToolBox<O, E>,
+    ) -> Result<Result<O, E>, ToolCallError> {
+        let prompt = (formatter.0)(system, messages);
+        self.tool_call(prompt, toolbox).await
+    }
+
+    pub async fn format_tool_call_with_raw_input<O, E>(
+        &self,
+        system: &str,
+        messages: &[Message],
+        formatter: &PromptFormatter,
+        toolbox: &ToolBox<O, E>,
+    ) -> Result<ToolCallWithRawInput<O, E>, ToolCallError> {
+        let prompt = (formatter.0)(system, messages);
+        self.tool_call_with_raw_input(prompt, toolbox).await
+    }
+
+    pub async fn tool_call_with_raw_input<O, E>(
+        &self,
+        prompt: String,
+        toolbox: &ToolBox<O, E>,
+    ) -> Result<ToolCallWithRawInput<O, E>, ToolCallError> {
         let mut json = self.request_config.clone();
         json.insert("prompt".to_owned(), Value::String(prompt));
         json.insert(
@@ -96,7 +137,7 @@ impl LlamaLink {
 
         if !response.status().is_success() {
             return Err(ToolCallError::Api {
-                issue: format!("HTTP Error: {}", response.status()),
+                issue: format!("HTTP Error Calling: {}", response.status()),
             });
         }
 
@@ -106,21 +147,15 @@ impl LlamaLink {
         })?;
         #[cfg(feature = "tracing")]
         tracing::debug!("Raw tool_call response:\n`{}`", &content);
-        let tool_call = serde_json::from_str(&content).unwrap(); //todo
+        let tool_call = serde_json::from_str(&content).map_err(|_| ToolCallError::Parsing {
+            issue: "Could not parse tool call response into valid json".to_owned(),
+        })?;
         let tool_call_result: Result<Result<O, E>, ToolCallError> =
             toolbox.call(tool_call).await.map_err(|error| error.into());
-        tool_call_result
-    }
-
-    pub async fn formatted_tool_call<O, E>(
-        &self,
-        system: &str,
-        messages: &[Message],
-        formatter: &PromptFormatter,
-        toolbox: &ToolBox<O, E>,
-    ) -> Result<Result<O, E>, ToolCallError> {
-        let prompt = (formatter.0)(system, messages);
-        self.tool_call(prompt, toolbox).await
+        tool_call_result.map(|e| ToolCallWithRawInput {
+            tool_result: e,
+            tool_input: content,
+        })
     }
 
     pub fn completion_stream(&self, prompt: String) -> Option<CompletionStream> {
