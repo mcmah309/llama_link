@@ -116,7 +116,7 @@ impl LlamaLink {
         self.tool_call(prompt, toolbox).await
     }
 
-    pub async fn format_tool_call_with_raw_input<O, E>(
+    pub async fn formatted_tool_call_with_raw_input<O, E>(
         &self,
         system: &str,
         messages: &[Message],
