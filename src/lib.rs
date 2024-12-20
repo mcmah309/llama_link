@@ -52,7 +52,7 @@ impl LlamaLink {
     pub fn new(url: &str, request_config: Config) -> Self {
         let request_config = match serde_json::to_value(request_config).unwrap() {
             Value::Object(map) => map,
-            _ => panic!("RequestConfig is not an object"),
+            _ => unreachable!("RequestConfig should always be created as an object"),
         };
         Self {
             client: Client::new(),
