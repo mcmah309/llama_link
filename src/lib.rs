@@ -160,6 +160,16 @@ impl LlamaLink {
         })
     }
 
+    pub fn formatted_completion_stream(
+        &self,
+        system: &str,
+        messages: &[Message],
+        formatter: &PromptFormatter,
+    ) -> CompletionStream {
+        let prompt = (formatter.0)(system, messages);
+        self.completion_stream(prompt)
+    }
+
     pub fn completion_stream(&self, prompt: String) -> CompletionStream {
         let mut json = self.request_config.clone();
         json.insert("prompt".to_owned(), Value::String(prompt));
@@ -227,8 +237,8 @@ impl LlamaLink {
 pub struct PromptFormatter(fn(&str, &[Message]) -> String);
 
 impl PromptFormatter {
-    pub fn new(format: fn(&str, &[Message]) -> String) -> Self {
-        Self(format)
+    pub fn new(formatter: fn(&str, &[Message]) -> String) -> Self {
+        Self(formatter)
     }
 }
 
