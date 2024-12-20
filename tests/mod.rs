@@ -7,7 +7,10 @@ mod normal {
     async fn completion() {
         let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
 
-        let response = link.completion("In one sentence, tell me a joke.".to_owned()).await.unwrap();
+        let response = link
+            .completion("In one sentence, tell me a joke.".to_owned())
+            .await
+            .unwrap();
 
         assert!(!response.is_empty())
     }
@@ -15,12 +18,18 @@ mod normal {
     #[tokio::test]
     async fn completion_stream() {
         let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
-        let mut response_stream = link.completion_stream("In one sentence, tell me a joke.".to_owned()).unwrap();
+        let mut response_stream =
+            link.completion_stream("In one sentence, tell me a joke.".to_owned());
 
         let mut count = 0;
         #[allow(unused_variables)]
         while let Some(content) = response_stream.next().await {
-            // print!("{}", content)
+            match content {
+                Ok(content) => {
+                    // print!("{}", content)
+                }
+                Err(error) => panic!("{}", error),
+            }
             count += 1;
         }
         assert!(count > 0);
@@ -79,17 +88,16 @@ mod toolbox {
         let tool = MyTool::new();
         let mut toolbox: ToolBox<Box<dyn Any>, Infallible> = ToolBox::new();
         toolbox.add_tool(tool).unwrap();
-        println!("Schema: {}", serde_json::to_string_pretty(&toolbox.schema()).unwrap());
+        println!(
+            "Schema: {}",
+            serde_json::to_string_pretty(&toolbox.schema()).unwrap()
+        );
 
         let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
-        let result = link
-            .tool_call("call greet".to_owned(), &toolbox)
-            .await;
+        let result = link.tool_call("call greet".to_owned(), &toolbox).await;
         match result {
             Ok(Ok(call_result)) => match call_result.downcast::<String>() {
-                Ok(message) => assert!(
-                    message.deref().starts_with("This is the greeting")
-                ),
+                Ok(message) => assert!(message.deref().starts_with("This is the greeting")),
                 Err(_) => panic!("Not the corect type"),
             },
             Err(error) => panic!("{}", error),

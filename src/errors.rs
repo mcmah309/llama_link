@@ -15,6 +15,11 @@ error_set::error_set! {
             function_name: String,
         },
     } || CompletionError;
+
+    CompletionStreamError = {
+        Deserialization(serde_json::Error),
+        SSE(reqwest_eventsource::Error)
+    };
 }
 
 impl From<serde_json::Error> for CompletionError {
