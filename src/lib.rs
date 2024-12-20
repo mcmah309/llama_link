@@ -250,11 +250,9 @@ impl PromptFormatter {
     pub fn new(formatter: fn(&str, &[Message]) -> String) -> Self {
         Self(formatter)
     }
-}
 
-impl Default for PromptFormatter {
     // https://www.llama.com/docs/model-cards-and-prompt-formats/meta-llama-3/
-    fn default() -> Self {
+    pub const fn default_const() -> Self {
         Self(|system, messages| {
             debug_assert!(messages.len() > 0, "Messages must not be empty");
             debug_assert!(
@@ -289,5 +287,11 @@ impl Default for PromptFormatter {
             formatted.push_str("<|start_header_id|>assistant<|end_header_id|>\n\n");
             formatted
         })
+    }
+}
+
+impl Default for PromptFormatter {
+    fn default() -> Self {
+        Self::default_const()
     }
 }
