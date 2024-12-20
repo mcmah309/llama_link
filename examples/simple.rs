@@ -51,7 +51,7 @@ async fn main() {
 
     let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
     let result = link
-        .tool_call(format_prompt("What do you think about canadians", &toolbox), &toolbox)
+        .call_function(format_prompt("What do you think about canadians", &toolbox), &toolbox)
         .await;
     match result {
         Ok(Ok(call_result)) => println!("{}", call_result),

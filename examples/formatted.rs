@@ -53,7 +53,7 @@ async fn main() {
     let system = format!("You are a helpful AI assistant. Respond to the user in this json function calling format: {}",serde_json::to_string(toolbox.schema()).unwrap());
     let messages = vec![Message::User("What do you think about the rust programming language".to_owned())];
     let result = link
-        .formatted_tool_call(
+        .call_function_with_format(
             &system, &messages, &PromptFormatter::default(), &toolbox)
         .await;
     match result {

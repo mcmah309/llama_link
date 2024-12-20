@@ -19,7 +19,7 @@ tracing = { version = "0.1", optional = true }
 error_set = { version = "0.8", features = ["tracing"] }
 
 # llmtoolbox = { git = "https://github.com/mcmah309/llmtoolbox.git" }
-llmtoolbox = "0.2"
+llmtoolbox = "0.3"
 schemars = "=1.0.0-alpha.17"
 # serde = { version = "1", features = ["serde_derive"] }
 

@@ -8,7 +8,7 @@ mod normal {
         let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
 
         let response = link
-            .completion("In one sentence, tell me a joke.".to_owned())
+            .create_completion("In one sentence, tell me a joke.".to_owned())
             .await
             .unwrap();
 
@@ -18,7 +18,7 @@ mod normal {
     #[tokio::test]
     async fn completion_stream() {
         let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
-        let mut response_stream = link.formatted_completion_stream(
+        let mut response_stream = link.create_formatted_completion_stream(
             "",
             &vec![Message::User("In one sentence, tell me a joke.".to_owned())],
             &PromptFormatter::default(),
@@ -87,7 +87,7 @@ mod toolbox {
     }
 
     #[tokio::test]
-    async fn tool_call() {
+    async fn function_call() {
         let tool = MyTool::new();
         let mut toolbox: ToolBox<Box<dyn Any>, Infallible> = ToolBox::new();
         toolbox.add_tool(tool).unwrap();
@@ -97,7 +97,7 @@ mod toolbox {
         );
 
         let link = LlamaLink::new("http://127.0.0.1:3756", Config::builder().build());
-        let result = link.tool_call("call greet".to_owned(), &toolbox).await;
+        let result = link.call_function("call greet".to_owned(), &toolbox).await;
         match result {
             Ok(Ok(call_result)) => match call_result.downcast::<String>() {
                 Ok(message) => assert!(message.deref().starts_with("This is the greeting")),

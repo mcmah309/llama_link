@@ -1,9 +1,8 @@
 mod errors;
 
 use errors::CompletionStreamError;
-pub use errors::{CompletionError, ToolCallError};
+pub use errors::{CompletionError, FunctionCallError};
 
-use core::panic;
 use llmtoolbox::ToolBox;
 use reqwest::Client;
 use reqwest_eventsource::{Event, EventSource};
@@ -38,10 +37,10 @@ pub enum Message {
     Assistant(String),
 }
 
-/// The result from calling the tool and the raw input used to call the tool.
-pub struct ToolCallFullContext<O, E> {
-    pub tool_result: Result<O, E>,
-    pub tool_input: String,
+/// The result from calling the function and the raw input used for the function call.
+pub struct FunctionCallContext<O, E> {
+    pub output_result: Result<O, E>,
+    pub raw_input: String,
 }
 
 pub type CompletionStream = std::pin::Pin<
@@ -61,17 +60,17 @@ impl LlamaLink {
         }
     }
 
-    pub async fn formatted_completion(
+    pub async fn create_completion_with_format(
         &self,
         system: &str,
         messages: &[Message],
         formatter: &PromptFormatter,
     ) -> Result<String, CompletionError> {
         let prompt = (formatter.0)(system, messages);
-        self.completion(prompt).await
+        self.create_completion(prompt).await
     }
 
-    pub async fn completion(&self, prompt: String) -> Result<String, CompletionError> {
+    pub async fn create_completion(&self, prompt: String) -> Result<String, CompletionError> {
         let mut json = self.request_config.clone();
         json.insert("prompt".to_owned(), Value::String(prompt));
         let json = Value::Object(json);
@@ -95,43 +94,43 @@ impl LlamaLink {
         })
     }
 
-    pub async fn tool_call<O, E>(
+    pub async fn call_function<O, E>(
         &self,
         prompt: String,
         toolbox: &ToolBox<O, E>,
-    ) -> Result<Result<O, E>, ToolCallError> {
-        self.tool_call_full(prompt, toolbox)
+    ) -> Result<Result<O, E>, FunctionCallError> {
+        self.call_function_full(prompt, toolbox)
             .await
-            .map(|e| e.tool_result)
+            .map(|e| e.output_result)
     }
 
-    pub async fn formatted_tool_call<O, E>(
+    pub async fn call_function_with_format<O, E>(
         &self,
         system: &str,
         messages: &[Message],
         formatter: &PromptFormatter,
         toolbox: &ToolBox<O, E>,
-    ) -> Result<Result<O, E>, ToolCallError> {
+    ) -> Result<Result<O, E>, FunctionCallError> {
         let prompt = (formatter.0)(system, messages);
-        self.tool_call(prompt, toolbox).await
+        self.call_function(prompt, toolbox).await
     }
 
-    pub async fn formatted_tool_call_full<O, E>(
+    pub async fn call_function_with_format_full<O, E>(
         &self,
         system: &str,
         messages: &[Message],
         formatter: &PromptFormatter,
         toolbox: &ToolBox<O, E>,
-    ) -> Result<ToolCallFullContext<O, E>, ToolCallError> {
+    ) -> Result<FunctionCallContext<O, E>, FunctionCallError> {
         let prompt = (formatter.0)(system, messages);
-        self.tool_call_full(prompt, toolbox).await
+        self.call_function_full(prompt, toolbox).await
     }
 
-    pub async fn tool_call_full<O, E>(
+    pub async fn call_function_full<O, E>(
         &self,
         prompt: String,
         toolbox: &ToolBox<O, E>,
-    ) -> Result<ToolCallFullContext<O, E>, ToolCallError> {
+    ) -> Result<FunctionCallContext<O, E>, FunctionCallError> {
         let mut json = self.request_config.clone();
         json.insert("prompt".to_owned(), Value::String(prompt));
         json.insert(
@@ -148,39 +147,39 @@ impl LlamaLink {
             .await?;
 
         if !response.status().is_success() {
-            return Err(ToolCallError::Api {
+            return Err(FunctionCallError::Api {
                 issue: format!("HTTP Error Calling: {}", response.status()),
             });
         }
 
         let response_body: CompletionResponse = response.json().await?;
-        let content = response_body.content.ok_or_else(|| ToolCallError::Api {
+        let content = response_body.content.ok_or_else(|| FunctionCallError::Api {
             issue: "No `content` field in response body".to_owned(),
         })?;
         #[cfg(feature = "tracing")]
         tracing::debug!("Raw tool_call response:\n`{}`", &content);
-        let tool_call = serde_json::from_str(&content).map_err(|_| ToolCallError::Parsing {
+        let tool_call = serde_json::from_str(&content).map_err(|_| FunctionCallError::Parsing {
             issue: "Could not parse tool call response into valid json".to_owned(),
         })?;
-        let tool_call_result: Result<Result<O, E>, ToolCallError> =
-            toolbox.call(tool_call).await.map_err(|error| error.into());
-        tool_call_result.map(|e| ToolCallFullContext {
-            tool_result: e,
-            tool_input: content,
+        let tool_call_result: Result<Result<O, E>, FunctionCallError> = 
+            toolbox.call_from_value(tool_call).await.map_err(|error| error.into());
+        tool_call_result.map(|e| FunctionCallContext {
+            output_result: e,
+            raw_input: content,
         })
     }
 
-    pub fn formatted_completion_stream(
+    pub fn create_formatted_completion_stream(
         &self,
         system: &str,
         messages: &[Message],
         formatter: &PromptFormatter,
     ) -> CompletionStream {
         let prompt = (formatter.0)(system, messages);
-        self.completion_stream(prompt)
+        self.create_completion_stream(prompt)
     }
 
-    pub fn completion_stream(&self, prompt: String) -> CompletionStream {
+    pub fn create_completion_stream(&self, prompt: String) -> CompletionStream {
         let mut json = self.request_config.clone();
         json.insert("prompt".to_owned(), Value::String(prompt));
         json.insert("stream".to_owned(), Value::Bool(true));

@@ -9,7 +9,7 @@ error_set::error_set! {
             issue: String,
         }
     };
-    ToolCallError = {
+    FunctionCallError = {
         #[display("The function with name `{function_name}` was not found in the toolbox")]
         FunctionNotFound {
             function_name: String,
@@ -40,7 +40,7 @@ impl From<reqwest::Error> for CompletionError {
 
 //************************************************************************//
 
-impl From<serde_json::Error> for ToolCallError {
+impl From<serde_json::Error> for FunctionCallError {
     fn from(error: serde_json::Error) -> Self {
         Self::Parsing {
             issue: error.to_string(),
@@ -48,7 +48,7 @@ impl From<serde_json::Error> for ToolCallError {
     }
 }
 
-impl From<reqwest::Error> for ToolCallError {
+impl From<reqwest::Error> for FunctionCallError {
     fn from(error: reqwest::Error) -> Self {
         Self::Api {
             issue: error.to_string(),
@@ -56,13 +56,13 @@ impl From<reqwest::Error> for ToolCallError {
     }
 }
 
-impl From<llmtoolbox::CallError> for ToolCallError {
-    fn from(error: llmtoolbox::CallError) -> Self {
+impl From<llmtoolbox::FunctionCallError> for FunctionCallError {
+    fn from(error: llmtoolbox::FunctionCallError) -> Self {
         match error {
-            llmtoolbox::CallError::FunctionNotFound { function_name } => {
+            llmtoolbox::FunctionCallError::FunctionNotFound { function_name } => {
                 Self::FunctionNotFound { function_name }
             }
-            llmtoolbox::CallError::Parsing { issue } => Self::Parsing { issue },
+            llmtoolbox::FunctionCallError::Parsing { issue } => Self::Parsing { issue },
         }
     }
 }
