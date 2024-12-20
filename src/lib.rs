@@ -39,7 +39,7 @@ pub enum Message {
 }
 
 /// The result from calling the tool and the raw input used to call the tool.
-pub struct ToolCallWithRawInput<O, E> {
+pub struct ToolCallFullContext<O, E> {
     pub tool_result: Result<O, E>,
     pub tool_input: String,
 }
@@ -100,7 +100,7 @@ impl LlamaLink {
         prompt: String,
         toolbox: &ToolBox<O, E>,
     ) -> Result<Result<O, E>, ToolCallError> {
-        self.tool_call_with_raw_input(prompt, toolbox)
+        self.tool_call_full(prompt, toolbox)
             .await
             .map(|e| e.tool_result)
     }
@@ -116,22 +116,22 @@ impl LlamaLink {
         self.tool_call(prompt, toolbox).await
     }
 
-    pub async fn formatted_tool_call_with_raw_input<O, E>(
+    pub async fn formatted_tool_call_full<O, E>(
         &self,
         system: &str,
         messages: &[Message],
         formatter: &PromptFormatter,
         toolbox: &ToolBox<O, E>,
-    ) -> Result<ToolCallWithRawInput<O, E>, ToolCallError> {
+    ) -> Result<ToolCallFullContext<O, E>, ToolCallError> {
         let prompt = (formatter.0)(system, messages);
-        self.tool_call_with_raw_input(prompt, toolbox).await
+        self.tool_call_full(prompt, toolbox).await
     }
 
-    pub async fn tool_call_with_raw_input<O, E>(
+    pub async fn tool_call_full<O, E>(
         &self,
         prompt: String,
         toolbox: &ToolBox<O, E>,
-    ) -> Result<ToolCallWithRawInput<O, E>, ToolCallError> {
+    ) -> Result<ToolCallFullContext<O, E>, ToolCallError> {
         let mut json = self.request_config.clone();
         json.insert("prompt".to_owned(), Value::String(prompt));
         json.insert(
@@ -164,7 +164,7 @@ impl LlamaLink {
         })?;
         let tool_call_result: Result<Result<O, E>, ToolCallError> =
             toolbox.call(tool_call).await.map_err(|error| error.into());
-        tool_call_result.map(|e| ToolCallWithRawInput {
+        tool_call_result.map(|e| ToolCallFullContext {
             tool_result: e,
             tool_input: content,
         })
